@@ -63,12 +63,9 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
     }
   };
 
-  const handleCreateLabel = async () => {
-    e?.preventDefault();
-    if (!newLabel.name.trim()) {
-      alert('Vui lòng nhập tên nhãn');
-      return;
-    }
+  const handleCreateLabel = async (e) => {
+    e?.preventDefault(); // Handle both form submit and button click
+    if (!newLabel.name.trim()) return;
 
     setLoading(true);
     try {
@@ -82,42 +79,40 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
       setShowAddNew(false);
     } catch (error) {
       console.error('Error creating label:', error);
-      console.error('Error response:', error.response?.data); // THÊM DÒNG NÀY
-    console.error('Error status:', error.response?.status);
       alert(error.response?.data?.error || 'Lỗi tạo nhãn');
     } finally {
       setLoading(false);
     }
   };
-  const handleEditLabel = async () => {
-    e?.preventDefault();
-  if (!newLabel.name.trim()) {
-    alert('Vui lòng nhập tên nhãn');
-    return;
-  }
 
-  setLoading(true);
-  try {
-    const response = await api.put(`/labels/${editing}`, newLabel);
-    
-    setAllLabels(prev => 
-      prev.map(label => label.id === editing ? response.data.data : label)
-    );
-    setCustomerLabels(prev =>
-      prev.map(label => label.id === editing ? response.data.data : label)
-    );
-    
-    setEditing(null);
-    setNewLabel({ name: '', emoji: '🏷️', color: '#0084ff' });
-    
-    if (onLabelsChange) onLabelsChange();
-  } catch (error) {
-    console.error('Error editing label:', error);
-    alert(error.response?.data?.error || 'Lỗi sửa nhãn');
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleEditLabel = async (e) => {
+    e?.preventDefault(); // Handle both form submit and button click
+    if (!newLabel.name.trim()) return;
+
+    setLoading(true);
+    try {
+      const response = await api.put(`/labels/${editing}`, newLabel);
+      
+      setAllLabels(prev => 
+        prev.map(label => label.id === editing ? response.data.data : label)
+      );
+      setCustomerLabels(prev =>
+        prev.map(label => label.id === editing ? response.data.data : label)
+      );
+      
+      setEditing(null);
+      setNewLabel({ name: '', emoji: '🏷️', color: '#0084ff' });
+      setShowAddNew(false); // Close form after edit
+      
+      if (onLabelsChange) onLabelsChange();
+    } catch (error) {
+      console.error('Error editing label:', error);
+      alert(error.response?.data?.error || 'Lỗi sửa nhãn');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteLabel = async (labelId) => {
   if (!window.confirm('Xóa nhãn này? Nhãn sẽ bị xóa khỏi tất cả khách hàng.')) {
     return;
@@ -201,7 +196,13 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
       )}
 
       {showAddNew ? (
-        <div className="p-3 bg-gray-50 rounded border border-gray-200">
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            editing ? handleEditLabel(e) : handleCreateLabel(e);
+          }}
+          className="p-3 bg-gray-50 rounded border border-gray-200"
+        >
           <h3 className="text-sm font-semibold text-gray-700 mb-2">
   {editing ? '✏️ Sửa nhãn' : 'Tạo nhãn mới:'}
 </h3>
@@ -274,15 +275,20 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
 
             <div className="flex gap-2">
               <button
-  onClick={editing ? handleEditLabel : handleCreateLabel}
-  disabled={loading}
-  className="flex-1 px-3 py-1.5 bg-primary text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50"
->
-  {loading ? '⏳' : (editing ? '✓ Cập nhật' : '✓ Tạo')}
-</button>
+                type="submit"
+                disabled={loading || !newLabel.name.trim()}
+                className="flex-1 px-3 py-1.5 bg-primary text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50"
+              >
+                {loading ? '⏳' : (editing ? '✓ Cập nhật' : '✓ Tạo')}
+              </button>
 
               <button
-                onClick={() => setShowAddNew(false)}
+                type="button"
+                onClick={() => {
+                  setShowAddNew(false);
+                  setEditing(null);
+                  setNewLabel({ name: '', emoji: '🏷️', color: '#0084ff' });
+                }}
                 disabled={loading}
                 className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
               >
@@ -290,7 +296,7 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
               </button>
             </div>
           </div>
-        </div>
+        </form>
       ) : (
         <button
           onClick={() => setShowAddNew(true)}
