@@ -14,7 +14,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   const [filePreview, setFilePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
-  
+  const [showTranslatePreview, setShowTranslatePreview] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const loadingRef = useRef(false);
@@ -81,59 +81,71 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   }, [messages]);
 
   const handleSend = async () => {
-    if (selectedFile) {
-      handleSendWithFile();
-      return;
-    }
-    
-    if (!inputText.trim() || sending) return;
+  if (selectedFile) {
+    handleSendWithFile();
+    return;
+  }
+  
+  if (!inputText.trim() || sending) return;
 
-    setSending(true);
-    try {
-      const messageToSend = translatedPreview || inputText;
-      const shouldTranslate = !translatedPreview;
-      
-      await onSendMessage(conversation.id, messageToSend, shouldTranslate);
-      setInputText('');
-      setTranslatedPreview('');
-      
-      setTimeout(loadMessages, 500);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Lỗi gửi tin nhắn: ' + error.message);
-    } finally {
-      setSending(false);
-    }
-  };
+  setSending(true);
+  try {
+    // GỬI TRỰC TIẾP, KHÔNG DỊCH
+    await onSendMessage(conversation.id, inputText, false); // false = không dịch
+    
+    setInputText('');
+    setTranslatedPreview('');
+    setShowTranslatePreview(false);
+    
+    setTimeout(loadMessages, 500);
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert('Lỗi gửi tin nhắn: ' + error.message);
+  } finally {
+    setSending(false);
+  }
+};
+
 
   const handleTranslate = async () => {
-    if (!inputText.trim() || translating) return;
+  if (!inputText.trim() || translating) return;
+  
+  setTranslating(true);
+  try {
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: inputText, to: 'en' })
+    });
     
-    setTranslating(true);
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText, to: 'en' })
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        setTranslatedPreview(data.data.translated);
-      } else {
-        alert('Lỗi dịch: ' + data.error);
-      }
-    } catch (error) {
-      console.error('Translation error:', error);
-      alert('Lỗi kết nối dịch thuật');
-    } finally {
-      setTranslating(false);
+    const data = await response.json();
+    if (data.success) {
+      setTranslatedPreview(data.data.translated);
+      setShowTranslatePreview(true); // HIỆN PREVIEW VỚI NÚT OK
+    } else {
+      alert('Lỗi dịch: ' + data.error);
     }
-  };
-
-  const handleClearTranslation = () => {
+  } catch (error) {
+    console.error('Translation error:', error);
+    alert('Lỗi kết nối dịch thuật');
+  } finally {
+    setTranslating(false);
+  }
+};
+  // THÊM 2 FUNCTION NÀY:
+const handleApplyTranslation = () => {
+  if (translatedPreview) {
+    setInputText(translatedPreview); // Thay text gốc bằng bản dịch
     setTranslatedPreview('');
-  };
+    setShowTranslatePreview(false);
+  }
+};
+
+const handleCancelTranslation = () => {
+  setTranslatedPreview('');
+  setShowTranslatePreview(false);
+};
+
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -398,25 +410,32 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
             {translating ? '⏳ Đang dịch...' : '🌐 Dịch sang EN'}
           </button>
           
-          {translatedPreview && (
-            <button
-              onClick={handleClearTranslation}
-              className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded text-sm transition"
-            >
-              ✕ Xóa bản dịch
-            </button>
-          )}
         </div>
 
-        {translatedPreview && (
-          <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start justify-between mb-1">
-              <span className="text-xs font-semibold text-blue-700">🇬🇧 Bản dịch:</span>
-            </div>
-            <p className="text-sm text-gray-800">{translatedPreview}</p>
-            <p className="text-xs text-gray-500 mt-1">Nhấn "Gửi" để gửi bản dịch này</p>
-          </div>
-        )}
+        {showTranslatePreview && translatedPreview && (
+  <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+    <div className="flex items-start justify-between mb-1">
+      <span className="text-xs font-semibold text-blue-700">🇬🇧 Bản dịch:</span>
+    </div>
+    <p className="text-sm text-gray-800 font-medium mb-2">{translatedPreview}</p>
+    
+    {/* NÚT OK VÀ XÓA */}
+    <div className="flex gap-2">
+      <button
+        onClick={handleApplyTranslation}
+        className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+      >
+        ✓ OK (Dùng bản dịch)
+      </button>
+      <button
+        onClick={handleCancelTranslation}
+        className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+      >
+        ✕ Xóa bản dịch
+      </button>
+    </div>
+  </div>
+)}
 
         {selectedFile && (
           <div className="mb-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
@@ -476,7 +495,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
-              if (translatedPreview) setTranslatedPreview('');
+
             }}
             onKeyPress={handleKeyPress}
             placeholder="Nhập tin nhắn... (Enter để gửi)"
