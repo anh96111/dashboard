@@ -64,6 +64,7 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
   };
 
   const handleCreateLabel = async () => {
+    e?.preventDefault();
     if (!newLabel.name.trim()) {
       alert('Vui lòng nhập tên nhãn');
       return;
@@ -89,6 +90,7 @@ const LabelManager = ({ conversation, onLabelsChange }) => {
     }
   };
   const handleEditLabel = async () => {
+    e?.preventDefault();
   if (!newLabel.name.trim()) {
     alert('Vui lòng nhập tên nhãn');
     return;
