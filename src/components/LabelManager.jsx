@@ -3,6 +3,8 @@ import { labelsAPI } from '../services/api';
 import api from '../services/api';
 
 const LabelManager = ({ conversation, onLabelsChange }) => {
+  console.log('🔄 LabelManager rendered');
+  
   const [allLabels, setAllLabels] = useState([]);
   const [customerLabels, setCustomerLabels] = useState([]);
   const [showAddNew, setShowAddNew] = useState(false);

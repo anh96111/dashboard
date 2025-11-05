@@ -8,6 +8,8 @@ import notificationService from '../utils/notification';
 import NotificationSettings from '../components/NotificationSettings';
 
 const Dashboard = () => {
+  console.log('🔄 Dashboard rendered');
+  
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [labels, setLabels] = useState([]);
