@@ -24,16 +24,21 @@ const Dashboard = () => {
   const [notifPermission, setNotifPermission] = useState(Notification.permission);
 
   useEffect(() => {
-    loadInitialData();
-    connectSocket();
-    
-    // Initialize notifications
-
-    return () => {
-      socketService.disconnect();
-    };
-  }, []);
-
+  loadInitialData();
+  connectSocket();
+  
+  // THÊM: Listen labels update
+  const handleLabelsUpdate = () => {
+    loadConversations(); // Reload conversations để update labels ở sidebar
+  };
+  
+  window.addEventListener('labelsUpdated', handleLabelsUpdate);
+  
+  return () => {
+    socketService.disconnect();
+    window.removeEventListener('labelsUpdated', handleLabelsUpdate);
+  };
+}, []);
   const loadInitialData = async () => {
     setLoading(true);
     try {

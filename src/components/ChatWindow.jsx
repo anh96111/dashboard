@@ -267,11 +267,15 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
 
       {showLabelManager && (
         <LabelManager 
-          conversation={conversation}
-          onLabelsChange={() => {
-            window.location.reload();
-          }}
-        />
+  conversation={conversation}
+  onLabelsChange={() => {
+    // Bỏ window.location.reload()
+    // Emit event để Dashboard biết và update
+    window.dispatchEvent(new CustomEvent('labelsUpdated', {
+      detail: { conversationId: conversation.id }
+    }));
+  }}
+/>
       )}
 
       {/* Messages */}
