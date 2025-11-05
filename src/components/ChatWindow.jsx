@@ -42,7 +42,26 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
       loadingRef.current = false;
     }
   }, [conversation?.id]);
-
+ const appendNewMessage = useCallback((newMessage) => {
+    setMessages(prev => {
+      // Kiểm tra tin nhắn đã tồn tại chưa
+      const exists = prev.some(m => 
+        m.id === newMessage.id || 
+        (m.content === newMessage.content && 
+         m.created_at === newMessage.created_at)
+      );
+      
+      if (exists) return prev;
+      
+      // Thêm tin nhắn mới vào cuối
+      return [...prev, newMessage];
+    });
+    
+    // Cuộn xuống tin nhắn mới
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, []);
   // Load messages khi conversation thay đổi
   useEffect(() => {
     if (conversation?.id) {
@@ -51,7 +70,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
     }
   }, [conversation?.id, loadMessages]);
 
-  // Listen to window event for new messages
+    // Listen to window event for new messages
   useEffect(() => {
     if (!conversation?.id) return;
     
@@ -60,8 +79,23 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
       console.log('🎯 ChatWindow received event:', data);
       
       if (data && data.customerId === conversation.id) {
-        console.log('🔄 Reloading messages for current conversation');
-        loadMessages();
+        // THAY ĐỔI: Thêm tin mới thay vì reload
+        if (data.message || data.content) {
+          appendNewMessage({
+            id: data.messageId || Date.now(),
+            content: data.message || data.content,
+            sender_type: data.senderType || 'customer',
+            created_at: data.timestamp || new Date().toISOString(),
+            translated_text: data.translatedText,
+            media_type: data.mediaType,
+            media_url: data.mediaUrl
+          });
+          console.log('✅ Tin nhắn mới đã được thêm');
+        } else {
+          // Nếu không có data, reload như cũ
+          console.log('🔄 Reloading messages (no message data)');
+          loadMessages();
+        }
       }
     };
     
@@ -70,7 +104,8 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
     return () => {
       window.removeEventListener('newMessageReceived', handleNewMessage);
     };
-  }, [conversation?.id, loadMessages]);
+  }, [conversation?.id, appendNewMessage, loadMessages]);
+
 
   // Auto scroll khi có tin mới
   useEffect(() => {
@@ -97,7 +132,19 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
     setTranslatedPreview('');
     setShowTranslatePreview(false);
     
-    setTimeout(loadMessages, 500);
+        // Thêm tin nhắn của mình vào list
+    appendNewMessage({
+      id: Date.now(),
+      content: inputText,
+      sender_type: 'admin',
+      created_at: new Date().toISOString(),
+      media_type: null,
+      media_url: null
+    });
+    
+    // Vẫn reload để đồng bộ (nhưng delay lâu hơn)
+    setTimeout(loadMessages, 1000);
+
   } catch (error) {
     console.error('Error sending message:', error);
     alert('Lỗi gửi tin nhắn: ' + error.message);
@@ -495,7 +542,7 @@ const handleCancelTranslation = () => {
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
-
+          
             }}
             onKeyPress={handleKeyPress}
             placeholder="Nhập tin nhắn... (Enter để gửi)"
