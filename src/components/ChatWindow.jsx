@@ -116,35 +116,43 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   }, [messages]);
 
   const handleSend = async () => {
+  // Nếu có file đính kèm
   if (selectedFile) {
     handleSendWithFile();
     return;
   }
   
+  // Kiểm tra có tin nhắn không
   if (!inputText.trim() || sending) return;
 
   setSending(true);
+  
+  // LƯU TIN NHẮN TRƯỚC KHI XÓA
+  const tinNhanGuiDi = inputText;
+  const thoiGianGui = new Date().toISOString();
+  
   try {
-    // GỬI TRỰC TIẾP, KHÔNG DỊCH
-    await onSendMessage(conversation.id, inputText, false); // false = không dịch
+    // GỌI API GỬI TIN
+    await onSendMessage(conversation.id, tinNhanGuiDi, false);
     
+    // XÓA Ô NHẬP TIN NGAY
     setInputText('');
     setTranslatedPreview('');
-    setShowTranslatePreview(false);
-    
-        // Thêm tin nhắn của mình vào list
+    // THÊM TIN VÀO CUỐI DANH SÁCH NGAY LẬP TỨC
+    // (Không cần chờ server, hiện ngay cho nhanh)
     appendNewMessage({
-      id: Date.now(),
-      content: inputText,
-      sender_type: 'admin',
-      created_at: new Date().toISOString(),
+      id: `temp-${Date.now()}`,  // ID tạm
+      content: tinNhanGuiDi,      // Nội dung tin nhắn
+      sender_type: 'admin',        // Người gửi là admin (bạn)
+      created_at: thoiGianGui,     // Thời gian
       media_type: null,
       media_url: null
     });
     
-    // Vẫn reload để đồng bộ (nhưng delay lâu hơn)
-    setTimeout(loadMessages, 1000);
-
+    // KHÔNG GỌI loadMessages() NGAY
+    // Comment out hoặc xóa dòng này:
+    // setTimeout(loadMessages, 500);  ← XÓA DÒNG NÀY
+    
   } catch (error) {
     console.error('Error sending message:', error);
     alert('Lỗi gửi tin nhắn: ' + error.message);
@@ -152,6 +160,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
     setSending(false);
   }
 };
+
 
 
   const handleTranslate = async () => {
