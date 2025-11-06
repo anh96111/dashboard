@@ -78,9 +78,27 @@ const Sidebar = ({ conversations, selectedId, onSelect, labels, unreadConversati
                 <div className="flex items-start gap-3">
                   {/* Avatar with unread badge */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold text-lg">
-                      {conv.name?.[0]?.toUpperCase() || '?'}
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-primary text-white flex items-center justify-center font-bold text-lg">
+                      {conv.avatar ? (
+                        <img 
+                          src={conv.avatar} 
+                          alt={conv.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Nếu load ảnh lỗi, hiển thị chữ cái
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ display: conv.avatar ? 'none' : 'flex' }}
+                      >
+                        {conv.name?.[0]?.toUpperCase() || '?'}
+                      </div>
                     </div>
+
                     {isUnread && (
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
                         <span className="text-white text-xs font-bold">●</span>

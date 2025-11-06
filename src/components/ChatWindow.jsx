@@ -81,6 +81,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
       if (data && data.customerId === conversation.id) {
         // THAY ĐỔI: Thêm tin mới thay vì reload
         if (data.message || data.content) {
+          
           appendNewMessage({
             id: data.messageId || Date.now(),
             content: data.message || data.content,
@@ -299,9 +300,24 @@ const handleCancelTranslation = () => {
       <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">
-              {conversation.name?.[0]?.toUpperCase() || '?'}
-            </div>
+            {conversation.avatar ? (
+  <img 
+    src={conversation.avatar} 
+    alt={conversation.name}
+    className="w-10 h-10 rounded-full object-cover"
+    onError={(e) => {
+      e.target.outerHTML = `
+        <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+          ${conversation.name?.[0]?.toUpperCase() || '?'}
+        </div>
+      `;
+    }}
+  />
+) : (
+  <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+    {conversation.name?.[0]?.toUpperCase() || '?'}
+  </div>
+)}
             <div>
               <h2 className="font-semibold text-gray-800">{conversation.name || 'Unknown'}</h2>
               <p className="text-xs text-gray-500">#{conversation.fb_id?.slice(-6)}</p>
