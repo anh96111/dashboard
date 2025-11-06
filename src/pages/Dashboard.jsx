@@ -5,7 +5,7 @@ import QuickReplyManager from '../components/QuickReplyManager';
 import { conversationsAPI, labelsAPI, quickRepliesAPI } from '../services/api';
 import socketService from '../services/socket';
 import notificationService from '../utils/notification';
-import NotificationSettings from '../components/NotificationSettings';
+
 
 const Dashboard = () => {
   console.log('🔄 Dashboard rendered');
@@ -19,9 +19,7 @@ const Dashboard = () => {
   const [showQRManager, setShowQRManager] = useState(false);
   const [unreadConversations, setUnreadConversations] = useState(new Set());
   const [messageReloadTriggers, setMessageReloadTriggers] = useState({});
-  const [showNotifSettings, setShowNotifSettings] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(true);
-  const [notifPermission, setNotifPermission] = useState(Notification.permission);
+ 
 
   useEffect(() => {
   loadInitialData();
@@ -238,9 +236,6 @@ const Dashboard = () => {
       </div>
 
       {/* Notification Settings */}
-      {showNotifSettings && (
-        <NotificationSettings onClose={() => setShowNotifSettings(false)} />
-      )}
 
       {/* Quick Reply Manager Modal */}
       {showQRManager && (

@@ -3,111 +3,146 @@
 class NotificationService {
   constructor() {
     this.audioContext = null;
-    this.audioBuffer = null;
     this.enabled = true;
-    this.audioReady = false;
+    
+    // Auto init khi load
+    this.init();
   }
 
-  async enableAudio() {
+  init() {
+    // Init audio context an toàn
     try {
-      // Tạo AudioContext
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.audioContext = new AudioContext();
-      
-      // Fetch và decode audio file
-      const response = await fetch('/sounds/notification.wav');
-      const arrayBuffer = await response.arrayBuffer();
-      this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      
-      this.audioReady = true;
-      console.log('✓ Audio context ready');
-      
-      return true;
+      console.log('✓ Sound ready');
     } catch (error) {
-      console.error('Error enabling audio:', error);
-      throw error;
+      console.warn('Sound not available');
+    }
+
+    // Auto request permission trên desktop
+    if (this.isDesktop() && this.hasNotificationAPI()) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
     }
   }
 
+  // Check xem có phải desktop không
+  isDesktop() {
+    return !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  }
+
+  // Check xem browser có hỗ trợ Notification không
+  hasNotificationAPI() {
+    return typeof Notification !== 'undefined';
+  }
+
+  // Play sound đơn giản (không cần file wav)
   async playSound() {
-    if (!this.enabled || !this.audioReady || !this.audioContext || !this.audioBuffer) {
-      console.log('Sound not ready');
-      return;
-    }
-    
+    if (!this.enabled || !this.audioContext) return;
+
     try {
-      // Resume context nếu bị suspend
+      // Resume nếu bị suspended
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
-      
-      // Tạo source mới mỗi lần play
-      const source = this.audioContext.createBufferSource();
-      source.buffer = this.audioBuffer;
-      
-      // Tạo gain node để điều chỉnh volume
+
+      // Tạo âm thanh beep đơn giản
+      const oscillator = this.audioContext.createOscillator();
       const gainNode = this.audioContext.createGain();
-      gainNode.gain.value = 0.7;
-      
-      source.connect(gainNode);
+
+      oscillator.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
+
+      oscillator.frequency.value = 800; // Frequency
+      oscillator.type = 'sine';
+
+      gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        this.audioContext.currentTime + 0.3
+      );
+
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + 0.3);
       
-      source.start(0);
       console.log('✓ Sound played');
     } catch (error) {
-      console.error('Sound play error:', error);
+      // Silently fail - không crash app
     }
   }
 
+  // Show notification an toàn
   showNotification(title, body) {
-    if (!this.enabled) return;
-    
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const notification = new Notification(title, {
-        body: body,
-        icon: '/logo192.png',
-        badge: '/logo192.png',
-        tag: 'new-message',
-        requireInteraction: false,
-        silent: true // Tắt âm thanh hệ thống vì đã có custom sound
-      });
-      
-      setTimeout(() => notification.close(), 5000);
-      
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-      
-      return notification;
+    // Chỉ show trên desktop và khi có permission
+    if (this.isDesktop() && 
+        this.hasNotificationAPI() && 
+        Notification.permission === 'granted') {
+      try {
+        const notification = new Notification(title, {
+          body: body,
+          icon: '/logo192.png',
+          tag: 'msg',
+          silent: true
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+
+        setTimeout(() => notification.close(), 4000);
+      } catch (error) {
+        // Silently fail
+      }
     }
   }
 
+  // Main notify method
   notify(customerName, message) {
-    console.log('🔔 Notification triggered:', customerName);
+    console.log('🔔 Notification:', customerName);
+    
+    // Luôn phát âm thanh (hoạt động trên mọi thiết bị)
     this.playSound();
+    
+    // Chỉ show popup trên desktop
     this.showNotification(
       `💬 ${customerName}`,
-      message.substring(0, 100)
+      message ? message.substring(0, 100) : 'Tin nhắn mới'
     );
   }
 
+  // Simple enable/disable
   setEnabled(enabled) {
     this.enabled = enabled;
   }
 
-  // Yêu cầu quyền thông báo
+  enable() {
+    this.enabled = true;
+  }
+
+  disable() {
+    this.enabled = false;
+  }
+
+  // Các method này để tương thích với code cũ
+  async enableAudio() {
+    return true; // Always return true
+  }
+
   async requestPermission() {
-    if ('Notification' in window) {
-      const permission = await Notification.requestPermission();
-      return permission;
+    if (this.hasNotificationAPI()) {
+      try {
+        return await Notification.requestPermission();
+      } catch {
+        return 'denied';
+      }
     }
     return 'unsupported';
   }
 
-  // Kiểm tra quyền thông báo
   checkPermission() {
-    if ('Notification' in window) {
+    if (this.hasNotificationAPI()) {
       return Notification.permission;
     }
     return 'unsupported';
