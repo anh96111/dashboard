@@ -127,6 +127,7 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
 
   setSending(true);
   
+  // KHAI BÁO BIẾN Ở ĐÂY
   const tinNhanGuiDi = inputText;
   const thoiGianGui = new Date().toISOString();
   
