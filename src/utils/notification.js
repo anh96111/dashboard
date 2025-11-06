@@ -3,18 +3,24 @@
 class NotificationService {
   constructor() {
     this.audioContext = null;
+    this.audioBuffer = null;
     this.enabled = true;
     
     // Auto init khi load
     this.init();
   }
 
-  init() {
+  async init() {
     // Init audio context an toàn
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.audioContext = new AudioContext();
       console.log('✓ Sound ready');
+      
+      // Load file wav cho desktop
+      if (this.isDesktop()) {
+        await this.loadAudioFile();
+      }
     } catch (error) {
       console.warn('Sound not available');
     }
@@ -24,6 +30,19 @@ class NotificationService {
       if (Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
       }
+    }
+  }
+
+  // Load file notification.wav cho desktop
+  async loadAudioFile() {
+    try {
+      const response = await fetch('/sounds/notification.wav');
+      const arrayBuffer = await response.arrayBuffer();
+      this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      console.log('✓ Notification sound loaded');
+    } catch (error) {
+      console.warn('Could not load notification.wav, using beep sound');
+      this.audioBuffer = null;
     }
   }
 
@@ -37,7 +56,7 @@ class NotificationService {
     return typeof Notification !== 'undefined';
   }
 
-  // Play sound đơn giản (không cần file wav)
+  // Play sound - ưu tiên file wav trên desktop
   async playSound() {
     if (!this.enabled || !this.audioContext) return;
 
@@ -47,28 +66,44 @@ class NotificationService {
         await this.audioContext.resume();
       }
 
-      // Tạo âm thanh beep đơn giản
-      const oscillator = this.audioContext.createOscillator();
-      const gainNode = this.audioContext.createGain();
+      // Nếu là desktop VÀ có file wav -> play file
+      if (this.isDesktop() && this.audioBuffer) {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.audioBuffer;
+        
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = 0.7;
+        
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        source.start(0);
+        console.log('✓ WAV sound played');
+      } 
+      // Ngược lại (mobile hoặc không có file) -> beep đơn giản
+      else {
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
 
-      oscillator.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
 
-      oscillator.frequency.value = 800; // Frequency
-      oscillator.type = 'sine';
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
 
-      gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(
-        0.01,
-        this.audioContext.currentTime + 0.3
-      );
+        gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          this.audioContext.currentTime + 0.3
+        );
 
-      oscillator.start(this.audioContext.currentTime);
-      oscillator.stop(this.audioContext.currentTime + 0.3);
-      
-      console.log('✓ Sound played');
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 0.3);
+        
+        console.log('✓ Beep sound played');
+      }
     } catch (error) {
-      // Silently fail - không crash app
+      console.warn('Sound play error:', error);
     }
   }
 
@@ -82,7 +117,9 @@ class NotificationService {
         const notification = new Notification(title, {
           body: body,
           icon: '/logo192.png',
+          badge: '/logo192.png',
           tag: 'msg',
+          requireInteraction: false,
           silent: true
         });
 
@@ -91,7 +128,7 @@ class NotificationService {
           notification.close();
         };
 
-        setTimeout(() => notification.close(), 4000);
+        setTimeout(() => notification.close(), 5000);
       } catch (error) {
         // Silently fail
       }
@@ -102,7 +139,7 @@ class NotificationService {
   notify(customerName, message) {
     console.log('🔔 Notification:', customerName);
     
-    // Luôn phát âm thanh (hoạt động trên mọi thiết bị)
+    // Luôn phát âm thanh
     this.playSound();
     
     // Chỉ show popup trên desktop
@@ -127,7 +164,11 @@ class NotificationService {
 
   // Các method này để tương thích với code cũ
   async enableAudio() {
-    return true; // Always return true
+    // Reload audio file nếu cần
+    if (this.isDesktop() && !this.audioBuffer) {
+      await this.loadAudioFile();
+    }
+    return true;
   }
 
   async requestPermission() {
