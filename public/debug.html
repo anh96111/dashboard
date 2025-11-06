@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Debug Mobile</title>
+  <style>
+    body { 
+      font-family: -apple-system, system-ui; 
+      padding: 20px;
+      background: #f0f0f0;
+    }
+    .test { 
+      background: white; 
+      padding: 15px; 
+      margin: 10px 0; 
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+    .info { color: #666; font-size: 14px; }
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      margin: 10px 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>📱 iPhone Debug Test</h1>
+  
+  <div id="results"></div>
+  
+  <button onclick="location.reload()">🔄 Reload</button>
+  <button onclick="testAPI()">📡 Test API</button>
+  <button onclick="testReact()">⚛️ Test React App</button>
+
+  <script>
+    const log = (title, status, info = '') => {
+      const div = document.createElement('div');
+      div.className = 'test';
+      div.innerHTML = `
+        <div class="${status}">${title}: ${status.toUpperCase()}</div>
+        ${info ? `<div class="info">${info}</div>` : ''}
+      `;
+      document.getElementById('results').appendChild(div);
+    };
+
+    // Test 1: JavaScript
+    log('JavaScript', 'success', 'Working');
+
+    // Test 2: Screen
+    log('Screen Size', 'success', `${window.innerWidth}x${window.innerHeight}`);
+
+    // Test 3: Browser
+    const isIPhone = /iPhone/i.test(navigator.userAgent);
+    const isSafari = /Safari/i.test(navigator.userAgent);
+    log('Device', 'success', `iPhone: ${isIPhone}, Safari: ${isSafari}`);
+
+    // Test 4: Network
+    log('Network', navigator.onLine ? 'success' : 'error', 
+        navigator.onLine ? 'Online' : 'Offline');
+
+    // Test API
+    async function testAPI() {
+      try {
+        const res = await fetch('https://fb-telegram-bot-production.up.railway.app/api/health');
+        const data = await res.json();
+        log('API Backend', 'success', JSON.stringify(data));
+      } catch (err) {
+        log('API Backend', 'error', err.message);
+      }
+    }
+
+    // Test React App
+    function testReact() {
+      window.location.href = '/';
+    }
+
+    // Auto test API
+    testAPI();
+
+    // Check localStorage
+    try {
+      localStorage.setItem('test', '1');
+      localStorage.removeItem('test');
+      log('LocalStorage', 'success', 'Working');
+    } catch(e) {
+      log('LocalStorage', 'error', e.message);
+    }
+
+    // Check cookies
+    document.cookie = "test=1";
+    log('Cookies', document.cookie ? 'success' : 'error', 
+        document.cookie || 'Disabled');
+  </script>
+</body>
+</html>
