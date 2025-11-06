@@ -294,7 +294,7 @@ const handleCancelTranslation = () => {
     // Queue for background sync
     const queued = await offlineQueue.savePendingMessage(
       conversation.id,
-      tinNhanGuiDi,
+      inputText,
       false
     );
     
