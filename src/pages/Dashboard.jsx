@@ -5,7 +5,7 @@ import QuickReplyManager from '../components/QuickReplyManager';
 import { conversationsAPI, labelsAPI, quickRepliesAPI } from '../services/api';
 import socketService from '../services/socket';
 import notificationService from '../utils/notification';
-
+import pushManager from '../utils/pushNotifications';
 
 const Dashboard = () => {
   console.log('🔄 Dashboard rendered');
@@ -29,12 +29,44 @@ const Dashboard = () => {
   const handleLabelsUpdate = () => {
     loadConversations(); // Reload conversations để update labels ở sidebar
   };
-  
   window.addEventListener('labelsUpdated', handleLabelsUpdate);
-  
+
+  // Init push notifications
+  pushManager.init().then(success => {
+    if (success) {
+      console.log('✅ Push notifications enabled');
+    }
+  }).catch(err => {
+    console.error('Push init error', err);
+  });
+
+  // Listen for SW messages
+  const swMessageHandler = (event) => {
+    const data = event.data || {};
+
+    if (data.type === 'notification-click') {
+      // Handle notification click
+      const customerId = data.customerId;
+      if (customerId) {
+        const conv = conversations.find(c => c.id === customerId);
+        if (conv) {
+          handleSelectConversation(conv);
+        }
+      }
+    }
+
+    if (data.type === 'sync-complete') {
+      // Reload data after sync
+      loadConversations();
+    }
+  };
+
+  navigator.serviceWorker?.addEventListener('message', swMessageHandler);
+
   return () => {
     socketService.disconnect();
     window.removeEventListener('labelsUpdated', handleLabelsUpdate);
+    navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
   };
 }, []);
   const loadInitialData = async () => {

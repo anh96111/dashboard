@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { conversationsAPI } from '../services/api';
 import LabelManager from './LabelManager';
+import offlineQueue from '../utils/offlineQueue';
 
 const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   const [messages, setMessages] = useState([]);
@@ -117,46 +118,66 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   }, [messages]);
 
   const handleSend = async () => {
-  // Nếu có file đính kèm
   if (selectedFile) {
     handleSendWithFile();
     return;
   }
   
-  // Kiểm tra có tin nhắn không
   if (!inputText.trim() || sending) return;
 
   setSending(true);
   
-  // LƯU TIN NHẮN TRƯỚC KHI XÓA
   const tinNhanGuiDi = inputText;
   const thoiGianGui = new Date().toISOString();
   
   try {
-    // GỌI API GỬI TIN
+    // Check if online
+    if (!navigator.onLine) {
+      // Save to offline queue
+      await offlineQueue.savePendingMessage(conversation.id, tinNhanGuiDi, false);
+      
+      // Show offline message
+      appendNewMessage({
+        id: `offline-${Date.now()}`,
+        content: tinNhanGuiDi,
+        sender_type: 'admin',
+        created_at: thoiGianGui,
+        status: 'pending',
+        offline: true
+      });
+      
+      alert('📴 Offline - Tin nhắn sẽ được gửi khi có mạng');
+      
+      setInputText('');
+      setSending(false);
+      return;
+    }
+    
+    // Online - send normally
     await onSendMessage(conversation.id, tinNhanGuiDi, false);
     
-    // XÓA Ô NHẬP TIN NGAY
     setInputText('');
     setTranslatedPreview('');
-    // THÊM TIN VÀO CUỐI DANH SÁCH NGAY LẬP TỨC
-    // (Không cần chờ server, hiện ngay cho nhanh)
+    
     appendNewMessage({
-      id: `temp-${Date.now()}`,  // ID tạm
-      content: tinNhanGuiDi,      // Nội dung tin nhắn
-      sender_type: 'admin',        // Người gửi là admin (bạn)
-      created_at: thoiGianGui,     // Thời gian
+      id: `temp-${Date.now()}`,
+      content: tinNhanGuiDi,
+      sender_type: 'admin',
+      created_at: thoiGianGui,
       media_type: null,
       media_url: null
     });
     
-    // KHÔNG GỌI loadMessages() NGAY
-    // Comment out hoặc xóa dòng này:
-    // setTimeout(loadMessages, 500);  ← XÓA DÒNG NÀY
-    
   } catch (error) {
     console.error('Error sending message:', error);
-    alert('Lỗi gửi tin nhắn: ' + error.message);
+    
+    // If failed, save to offline queue
+    if (error.message.includes('Network') || error.message.includes('fetch')) {
+      await offlineQueue.savePendingMessage(conversation.id, tinNhanGuiDi, false);
+      alert('📴 Lỗi mạng - Tin nhắn đã được lưu để gửi sau');
+    } else {
+      alert('Lỗi gửi tin nhắn: ' + error.message);
+    }
   } finally {
     setSending(false);
   }
@@ -268,6 +289,20 @@ const handleCancelTranslation = () => {
     } finally {
       setUploading(false);
     }
+    if (!navigator.onLine) {
+    // Queue for background sync
+    const queued = await backgroundSync.queueMessage(
+      conversation.id,
+      tinNhanGuiDi,
+      false
+    );
+    
+    if (queued) {
+      alert('📤 Tin nhắn sẽ được gửi khi có mạng');
+      setInputText('');
+      return;
+    }
+  }
   };
 
   const handleQuickReply = (qr) => {
