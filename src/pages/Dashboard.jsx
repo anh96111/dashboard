@@ -19,7 +19,8 @@ const Dashboard = () => {
   const [showQRManager, setShowQRManager] = useState(false);
   const [unreadConversations, setUnreadConversations] = useState(new Set());
   const [messageReloadTriggers, setMessageReloadTriggers] = useState({});
- 
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
 
   useEffect(() => {
   loadInitialData();
@@ -93,10 +94,12 @@ const Dashboard = () => {
     socketService.connect();
 
     socketService.on('new_message', (data) => {
-      console.log('📨 New message received:', data);
-      
-      const isViewingConversation = selectedConversation?.id === data.customerId;
-      
+  console.log('📨 Dashboard received new_message:', data);
+  console.log('📱 Sidebar open:', sidebarOpen);
+  console.log('👁️ Current conversation:', selectedConversation?.id);
+  
+  const isViewingConversation = selectedConversation?.id === data.customerId;
+
       // Play notification (chỉ khi không xem conversation đó)
       if (!isViewingConversation || document.hidden) {
         notificationService.notify(
@@ -110,8 +113,10 @@ const Dashboard = () => {
         setUnreadConversations(prev => new Set([...prev, data.customerId]));
       }
       
-      // Reload conversations
-      loadConversations();
+      // Reload conversations - QUAN TRỌNG
+console.log('🔄 Reloading conversations...');
+loadConversations();
+
       
       // Emit custom event để ChatWindow reload
       window.dispatchEvent(new CustomEvent('newMessageReceived', { 
@@ -203,6 +208,41 @@ const Dashboard = () => {
       </div>
     );
   }
+// Swipe gesture handlers
+const minSwipeDistance = 50; // Khoảng cách tối thiểu để coi là swipe
+const edgeThreshold = 50; // Chỉ detect swipe từ 50px cạnh trái
+
+const onTouchStart = (e) => {
+  // Chỉ detect khi touch ở cạnh trái màn hình
+  if (e.targetTouches[0].clientX <= edgeThreshold) {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  }
+};
+
+const onTouchMove = (e) => {
+  if (touchStart !== null) {
+    setTouchEnd(e.targetTouches[0].clientX);
+  }
+};
+
+const onTouchEnd = () => {
+  if (!touchStart || !touchEnd) return;
+  
+  const distance = touchEnd - touchStart;
+  const isLeftSwipe = distance < -minSwipeDistance;
+  const isRightSwipe = distance > minSwipeDistance;
+  
+  // Chỉ xử lý swipe phải (mở sidebar)
+  if (isRightSwipe && !sidebarOpen) {
+    console.log('👉 Swipe right detected, opening sidebar');
+    setSidebarOpen(true);
+  }
+  
+  // Reset
+  setTouchStart(null);
+  setTouchEnd(null);
+};
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -231,23 +271,42 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <div className={`${
-          sidebarOpen ? 'block' : 'hidden'
-        } md:block w-full md:w-80 h-full`}>
-          <Sidebar
-            conversations={conversations}
-            selectedId={selectedConversation?.id}
-            onSelect={handleSelectConversation}
-            labels={labels}
-            unreadConversations={unreadConversations}
-          />
-        </div>
+        {/* Overlay khi sidebar mở (mobile) */}
+          {sidebarOpen && (
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+        {/* Sidebar - Luôn mount, chỉ ẩn bằng transform */}
+          <div className={`
+            fixed md:relative
+            top-0 left-0
+            w-full md:w-80 
+            h-full
+            bg-white
+            z-20
+            transition-transform duration-300
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            <Sidebar
+              conversations={conversations}
+              selectedId={selectedConversation?.id}
+              onSelect={handleSelectConversation}
+              labels={labels}
+              unreadConversations={unreadConversations}
+            />
+          </div>
+
 
         {/* Chat Window */}
-        <div className={`${
-          !sidebarOpen || selectedConversation ? 'flex' : 'hidden'
-        } md:flex flex-1 h-full relative`}>
+<div 
+  className="flex-1 h-full relative md:flex"
+  onTouchStart={onTouchStart}
+  onTouchMove={onTouchMove}
+  onTouchEnd={onTouchEnd}
+>
+
           {/* Back Button on Mobile */}
           {selectedConversation && (
             <button
