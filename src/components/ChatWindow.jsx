@@ -20,6 +20,10 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   const fileInputRef = useRef(null);
   const loadingRef = useRef(false);
   const lastMessageCountRef = useRef(0);
+  const [isVisible, setIsVisible] = useState(true);
+  const [pendingMessages, setPendingMessages] = useState([]);
+  const [viewingImage, setViewingImage] = useState(null);
+  const [imageZoom, setImageZoom] = useState(1);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -332,6 +336,16 @@ const handleCancelTranslation = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-white">
+       {/* Image Viewer Modal */}
+    {viewingImage && (
+      <ImageViewer
+        imageUrl={viewingImage}
+        onClose={() => {
+          setViewingImage(null);
+          setImageZoom(1);
+        }}
+      />
+    )}
       {/* Header */}
       <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
@@ -428,10 +442,15 @@ const handleCancelTranslation = () => {
                         <img 
                           src={msg.media_url} 
                           alt="Attachment" 
-                          className="max-w-full rounded"
+                          className="max-w-full rounded cursor-pointer hover:opacity-90 transition"
                           style={{ maxHeight: '300px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingImage(msg.media_url);
+                          }}
                         />
                       )}
+
                       {msg.media_type === 'video' && (
                         <video 
                           src={msg.media_url} 
@@ -619,6 +638,149 @@ const handleCancelTranslation = () => {
             {uploading ? '⏳' : sending ? '⏳' : '📤'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+// Image Viewer Component
+const ImageViewer = ({ imageUrl, onClose }) => {
+  const [zoom, setZoom] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageRef = useRef(null);
+
+  // Zoom with mouse wheel
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(prev => Math.min(Math.max(0.5, prev + delta), 3));
+  };
+
+  // Pinch to zoom (mobile)
+  useEffect(() => {
+    let lastDistance = 0;
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const distance = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY
+        );
+
+        if (lastDistance > 0) {
+          const delta = (distance - lastDistance) * 0.01;
+          setZoom(prev => Math.min(Math.max(0.5, prev + delta), 3));
+        }
+        lastDistance = distance;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      lastDistance = 0;
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
+
+  // Download image
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `image_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Lỗi tải ảnh');
+    }
+  };
+
+  // Drag to pan
+  const handleMouseDown = (e) => {
+    if (zoom > 1) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      setPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div className="absolute top-4 right-4 flex gap-2 z-10">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDownload();
+          }}
+          className="px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 transition"
+        >
+          📥 Tải về
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 transition"
+        >
+          ✕ Đóng
+        </button>
+      </div>
+
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg px-4 py-2 text-sm">
+        Zoom: {(zoom * 100).toFixed(0)}% | Cuộn chuột hoặc pinch để zoom
+      </div>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className="relative max-w-[90vw] max-h-[90vh] overflow-hidden cursor-move"
+      >
+        <img
+          ref={imageRef}
+          src={imageUrl}
+          alt="Full view"
+          style={{
+            transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+            transition: isDragging ? 'none' : 'transform 0.1s',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            objectFit: 'contain'
+          }}
+          draggable={false}
+        />
       </div>
     </div>
   );
