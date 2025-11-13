@@ -362,7 +362,7 @@ const handleCancelTranslation = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+    <div className="flex-1 flex flex-col bg-white h-full">
        {/* Image Viewer Modal */}
     {viewingImage && (
       <ImageViewer
@@ -440,7 +440,7 @@ const handleCancelTranslation = () => {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
           <div className="text-center text-gray-500 py-8">
             Đang tải tin nhắn...
@@ -547,7 +547,7 @@ const handleCancelTranslation = () => {
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+      <div className="p-4 border-t border-gray-200 bg-white">
         <div className="flex items-center gap-2 mb-2">
           <button
             onClick={() => setShowQuickReplies(!showQuickReplies)}

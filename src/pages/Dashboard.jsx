@@ -326,12 +326,16 @@ const onTouchEnd = () => {
         <div className="flex-1 h-full relative md:flex">
           {/* Swipe Zone - Chỉ active ở cạnh trái */}
           <div
-            className="absolute left-0 top-0 bottom-0 w-12 z-30 md:hidden"
+            className="absolute left-0 top-0 bottom-0 w-16 z-50 md:hidden"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
-            style={{ pointerEvents: sidebarOpen ? 'none' : 'auto' }}
+            style={{ 
+              pointerEvents: sidebarOpen ? 'none' : 'auto',
+              touchAction: 'pan-y' // Cho phép scroll dọc
+            }}
           />
+
 
 
           {/* Back Button on Mobile */}
