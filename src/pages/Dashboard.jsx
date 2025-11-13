@@ -21,6 +21,7 @@ const Dashboard = () => {
   const [messageReloadTriggers, setMessageReloadTriggers] = useState({});
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(null);
 
   useEffect(() => {
   loadInitialData();
@@ -217,20 +218,40 @@ const onTouchStart = (e) => {
   if (e.targetTouches[0].clientX <= edgeThreshold) {
     setTouchEnd(null);
     setTouchStart(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
   }
 };
+
 
 const onTouchMove = (e) => {
-  if (touchStart !== null) {
-    setTouchEnd(e.targetTouches[0].clientX);
+  if (touchStart !== null && touchStartY !== null) {
+    const currentX = e.targetTouches[0].clientX;
+    const currentY = e.targetTouches[0].clientY;
+    setTouchEnd(currentX);
+    
+    // Tính khoảng cách di chuyển
+    const deltaX = Math.abs(currentX - touchStart);
+    const deltaY = Math.abs(currentY - touchStartY);
+    
+    // Chỉ preventDefault khi vuốt NGANG nhiều hơn DỌC
+    if (deltaX > deltaY && deltaX > 15) {
+      e.preventDefault();
+    }
   }
 };
 
+
+
 const onTouchEnd = () => {
-  if (!touchStart || !touchEnd) return;
+  if (!touchStart || !touchEnd) {
+    // Reset nếu không có gesture hợp lệ
+    setTouchStart(null);
+    setTouchEnd(null);
+    setTouchStartY(null);
+    return;
+  }
   
   const distance = touchEnd - touchStart;
-  const isLeftSwipe = distance < -minSwipeDistance;
   const isRightSwipe = distance > minSwipeDistance;
   
   // Chỉ xử lý swipe phải (mở sidebar)
@@ -239,10 +260,12 @@ const onTouchEnd = () => {
     setSidebarOpen(true);
   }
   
-  // Reset
+  // Reset tất cả
   setTouchStart(null);
   setTouchEnd(null);
+  setTouchStartY(null);
 };
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -300,12 +323,16 @@ const onTouchEnd = () => {
 
 
         {/* Chat Window */}
-<div 
-  className="flex-1 h-full relative md:flex"
-  onTouchStart={onTouchStart}
-  onTouchMove={onTouchMove}
-  onTouchEnd={onTouchEnd}
->
+        <div className="flex-1 h-full relative md:flex">
+          {/* Swipe Zone - Chỉ active ở cạnh trái */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-12 z-30 md:hidden"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{ pointerEvents: sidebarOpen ? 'none' : 'auto' }}
+          />
+
 
           {/* Back Button on Mobile */}
           {selectedConversation && (
