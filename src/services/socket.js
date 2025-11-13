@@ -22,24 +22,28 @@ class SocketService {
     this.socket = io(API_URL, {
       transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionAttempts: Infinity,  // Luôn cố reconnect
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 3000,
+      reconnectionDelayMax: 5000,
       timeout: 20000,
-      forceNew: false,  // Giữ connection cũ
-      multiplex: true,  // Share connection
+      forceNew: false,
+      multiplex: true,
       
-      // Mobile optimization
-      pingTimeout: 60000,
-      pingInterval: 25000,
+      // Mobile optimization - QUAN TRỌNG
+      pingTimeout: 120000,        // 2 phút (tăng từ 60s)
+      pingInterval: 25000,        // 25 giây
       upgradeTimeout: 30000,
       
-      // Auto reconnect on mobile
+      // Auto reconnect
       autoConnect: true,
+      
+      // Detect device
       query: {
-        device: /iPhone|iPad|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+        device: /iPhone|iPad|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        timestamp: Date.now()     // Tránh cache
       }
     });
+
 
     this.setupEventHandlers();
   }
@@ -92,6 +96,31 @@ class SocketService {
     // Ping pong để giữ connection
     this.socket.on('pong', () => {
       console.log('🏓 Pong received');
+    });
+        // Listen online/offline events (mobile)
+    window.addEventListener('online', () => {
+      console.log('📶 Network online, reconnecting socket...');
+      if (!this.connected) {
+        this.socket.connect();
+      }
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('📴 Network offline');
+      this.connected = false;
+    });
+
+    // Mobile: Reconnect khi app resume
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !this.connected) {
+        console.log('📱 App resumed, checking socket...');
+        setTimeout(() => {
+          if (!this.connected) {
+            console.log('🔄 Force reconnect...');
+            this.socket.connect();
+          }
+        }, 1000);
+      }
     });
   }
 

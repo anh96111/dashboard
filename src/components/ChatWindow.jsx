@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { conversationsAPI } from '../services/api';
 import LabelManager from './LabelManager';
 import offlineQueue from '../utils/offlineQueue';
+import socketService from '../services/socket';
 
 const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
   const [messages, setMessages] = useState([]);
@@ -75,18 +76,16 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
     }
   }, [conversation?.id, loadMessages]);
 
-    // Listen to window event for new messages
+    // Listen to socket event directly for new messages
   useEffect(() => {
     if (!conversation?.id) return;
     
-    const handleNewMessage = (event) => {
-      const data = event.detail;
-      console.log('🎯 ChatWindow received event:', data);
+    const handleNewMessage = (data) => {
+      console.log('🎯 ChatWindow received socket event:', data);
       
       if (data && data.customerId === conversation.id) {
-        // THAY ĐỔI: Thêm tin mới thay vì reload
+        // Thêm tin mới
         if (data.message || data.content) {
-          
           appendNewMessage({
             id: data.messageId || Date.now(),
             content: data.message || data.content,
@@ -97,20 +96,48 @@ const ChatWindow = ({ conversation, onSendMessage, quickReplies }) => {
             media_url: data.mediaUrl
           });
           console.log('✅ Tin nhắn mới đã được thêm');
-        } else {
-          // Nếu không có data, reload như cũ
+        } 
+        else {
           console.log('🔄 Reloading messages (no message data)');
           loadMessages();
         }
+        
       }
     };
     
-    window.addEventListener('newMessageReceived', handleNewMessage);
+    // Listen trực tiếp từ socket
+    socketService.on('new_message', handleNewMessage);
+    socketService.on('message_sent', handleNewMessage);
     
     return () => {
-      window.removeEventListener('newMessageReceived', handleNewMessage);
+      socketService.off('new_message');
+      socketService.off('message_sent');
     };
   }, [conversation?.id, appendNewMessage, loadMessages]);
+      // Force reload khi app quay lại foreground (mobile)
+      useEffect(() => {
+        const handleVisibilityChange = () => {
+          if (!document.hidden && conversation?.id) {
+            console.log('📱 App visible again, checking for new messages...');
+            
+            if (!socketService.connected) {
+              console.log('🔄 Socket disconnected, reconnecting...');
+              socketService.forceReconnect();
+            }
+            
+            setTimeout(() => {
+              loadMessages();
+            }, 500);
+          }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+      }, [conversation?.id, loadMessages]);
+
 
 
   // Auto scroll khi có tin mới
@@ -691,7 +718,7 @@ const ImageViewer = ({ imageUrl, onClose }) => {
       document.removeEventListener('touchend', handleTouchEnd);
     };
   }, []);
-
+  
   // Download image
   const handleDownload = async () => {
     try {
