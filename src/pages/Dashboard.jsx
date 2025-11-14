@@ -32,7 +32,12 @@ const Dashboard = () => {
     loadConversations(); // Reload conversations để update labels ở sidebar
   };
   window.addEventListener('labelsUpdated', handleLabelsUpdate);
-
+  // THÊM: Listen socket reconnect
+  const handleSocketReconnect = () => {
+    console.log('🔄 Socket reconnected, reloading data...');
+    loadConversations(); // Reload conversations
+  };
+  window.addEventListener('socketReconnected', handleSocketReconnect);
   // Init push notifications
   pushManager.init().then(success => {
     if (success) {
@@ -68,6 +73,7 @@ const Dashboard = () => {
   return () => {
     socketService.disconnect();
     window.removeEventListener('labelsUpdated', handleLabelsUpdate);
+    window.removeEventListener('socketReconnected', handleSocketReconnect);
     navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
   };
 }, []);

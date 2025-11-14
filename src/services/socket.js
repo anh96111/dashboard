@@ -20,18 +20,18 @@ class SocketService {
     console.log('🔌 Connecting to Socket.io:', API_URL);
     
     this.socket = io(API_URL, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'], // Ưu tiên websocket
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelay: 500,  // Giảm xuống 500ms
+      reconnectionDelayMax: 3000,
       timeout: 20000,
       forceNew: false,
       multiplex: true,
       
-      // Mobile optimization - QUAN TRỌNG
-      pingTimeout: 120000,        // 2 phút (tăng từ 60s)
-      pingInterval: 25000,        // 25 giây
+      // Keep-alive aggressive
+      pingTimeout: 30000,      // Giảm xuống 30s
+      pingInterval: 10000,     // Ping mỗi 10s
       upgradeTimeout: 30000,
       
       // Auto reconnect
@@ -110,19 +110,58 @@ class SocketService {
       this.connected = false;
     });
 
-    // Mobile: Reconnect khi app resume
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && !this.connected) {
-        console.log('📱 App resumed, checking socket...');
-        setTimeout(() => {
-          if (!this.connected) {
-            console.log('🔄 Force reconnect...');
-            this.socket.connect();
-          }
-        }, 1000);
+        // Listen online/offline events
+    window.addEventListener('online', () => {
+      console.log('📶 Network online, reconnecting socket...');
+      if (!this.connected) {
+        this.socket.connect();
       }
     });
+
+    window.addEventListener('offline', () => {
+      console.log('📴 Network offline');
+      this.connected = false;
+    });
+
+    // QUAN TRỌNG: Reconnect khi tab active lại
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        console.log('👁️ Tab visible again');
+        
+        // Check socket status
+        if (!this.connected || !this.socket.connected) {
+          console.log('🔄 Socket disconnected, force reconnect...');
+          
+          // Disconnect cũ trước
+          if (this.socket) {
+            this.socket.disconnect();
+          }
+          
+          // Reconnect mới
+          setTimeout(() => {
+            this.socket.connect();
+            
+            // Request missed messages
+            setTimeout(() => {
+              if (this.connected) {
+                window.dispatchEvent(new CustomEvent('socketReconnected'));
+              }
+            }, 500);
+          }, 100);
+        }
+      } else {
+        console.log('👁️ Tab hidden');
+      }
+    });
+
+    // Keep-alive ping mỗi 10s khi tab active
+    setInterval(() => {
+      if (!document.hidden && this.connected) {
+        this.socket.emit('ping');
+      }
+    }, 10000);
   }
+
 
   // Queue messages khi offline
   flushMessageQueue() {
