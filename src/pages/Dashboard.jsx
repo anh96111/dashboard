@@ -146,6 +146,7 @@ loadConversations();
       const response = await conversationsAPI.getAll();
       const convs = response.data.data || [];
       
+      console.log(`✅ Loaded ${convs.length} conversations`);
       // Sort: unread first, then by last message time
       const sorted = convs.sort((a, b) => {
         const aUnread = unreadConversations.has(a.id);
@@ -161,6 +162,7 @@ loadConversations();
       });
       
       setConversations(sorted);
+      console.log('✅ Conversations state updated');
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
