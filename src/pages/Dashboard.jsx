@@ -23,63 +23,7 @@ const Dashboard = () => {
   const [touchEnd, setTouchEnd] = useState(null);
   const [touchStartY, setTouchStartY] = useState(null);
 
-  useEffect(() => {
-  loadInitialData();
-  connectSocket();
-  
-  // THÊM: Listen labels update
-  const handleLabelsUpdate = () => {
-    loadConversations(); // Reload conversations để update labels ở sidebar
-  };
-  window.addEventListener('labelsUpdated', handleLabelsUpdate);
-  // THÊM: Listen socket reconnect
-    // Listen socket reconnect - RE-SETUP LISTENERS
-  const handleSocketReconnect = () => {
-    console.log('🔄 Socket reconnected, re-setup listeners...');
-    connectSocket(); // Setup lại listeners
-    loadConversations(); // Reload data
-  };
-  window.addEventListener('socketReconnected', handleSocketReconnect);
-  // Init push notifications
-  pushManager.init().then(success => {
-    if (success) {
-      console.log('✅ Push notifications enabled');
-    }
-  }).catch(err => {
-    console.error('Push init error', err);
-  });
-
-  // Listen for SW messages
-  const swMessageHandler = (event) => {
-    const data = event.data || {};
-
-    if (data.type === 'notification-click') {
-      // Handle notification click
-      const customerId = data.customerId;
-      if (customerId) {
-        const conv = conversations.find(c => c.id === customerId);
-        if (conv) {
-          handleSelectConversation(conv);
-        }
-      }
-    }
-
-    if (data.type === 'sync-complete') {
-      // Reload data after sync
-      loadConversations();
-    }
-  };
-
-  navigator.serviceWorker?.addEventListener('message', swMessageHandler);
-
-  return () => {
-    socketService.disconnect();
-    window.removeEventListener('labelsUpdated', handleLabelsUpdate);
-    window.removeEventListener('socketReconnected', handleSocketReconnect);
-    navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
-  };
-}, [connectSocket]);
-
+  // Load initial data
   const loadInitialData = async () => {
     setLoading(true);
     try {
@@ -100,12 +44,15 @@ const Dashboard = () => {
     }
   };
 
+  // Load conversations
   const loadConversations = useCallback(async () => {
     try {
+      console.log('🔄 Loading conversations...');
       const response = await conversationsAPI.getAll();
       const convs = response.data.data || [];
       
       console.log(`✅ Loaded ${convs.length} conversations`);
+      
       // Sort: unread first, then by last message time
       const sorted = convs.sort((a, b) => {
         const aUnread = unreadConversations.has(a.id);
@@ -114,7 +61,6 @@ const Dashboard = () => {
         if (aUnread && !bUnread) return -1;
         if (!aUnread && bUnread) return 1;
         
-        // Both same unread status, sort by time
         const aTime = new Date(a.last_message_at || 0);
         const bTime = new Date(b.last_message_at || 0);
         return bTime - aTime;
@@ -124,63 +70,119 @@ const Dashboard = () => {
       console.log('✅ Conversations state updated');
     } catch (error) {
       console.error('Error loading conversations:', error);
-  }
+    }
   }, [unreadConversations]);
-  
+
+  // Connect socket with listeners
   const connectSocket = useCallback(() => {
-  console.log('🔌 Setting up socket listeners...');
-  
-  // Cleanup old listeners trước
-  socketService.off('new_message');
-  socketService.off('message_sent');
-  
-  // Connect socket
-  socketService.connect();
-
-  // Setup new listeners
-  socketService.on('new_message', (data) => {
-    console.log('📨 Dashboard received new_message:', data);
-    console.log('📱 Sidebar open:', sidebarOpen);
-    console.log('👁️ Current conversation:', selectedConversation?.id);
+    console.log('🔌 Setting up socket listeners...');
     
-    const isViewingConversation = selectedConversation?.id === data.customerId;
-
-    // Play notification
-    if (!isViewingConversation || document.hidden) {
-      notificationService.notify(
-        data.customerName || 'Khách hàng',
-        data.message || 'Gửi media'
-      );
-    }
+    // Cleanup old listeners
+    socketService.off('new_message');
+    socketService.off('message_sent');
     
-    // Mark unread
-    if (!isViewingConversation) {
-      setUnreadConversations(prev => new Set([...prev, data.customerId]));
-    }
-    
-    // QUAN TRỌNG: Force reload conversations
-    console.log('🔄 Reloading conversations...');
-    loadConversations();
-    
-    // Emit custom event
-    window.dispatchEvent(new CustomEvent('newMessageReceived', { 
-      detail: data 
-    }));
-  });
+    // Connect socket
+    socketService.connect();
 
-  socketService.on('message_sent', (data) => {
-    console.log('✅ Message sent:', data);
-    loadConversations();
+    // Setup new listeners
+    socketService.on('new_message', (data) => {
+      console.log('📨 Dashboard received new_message:', data);
+      console.log('📱 Sidebar open:', sidebarOpen);
+      console.log('👁️ Current conversation:', selectedConversation?.id);
+      
+      const isViewingConversation = selectedConversation?.id === data.customerId;
+
+      // Play notification
+      if (!isViewingConversation || document.hidden) {
+        notificationService.notify(
+          data.customerName || 'Khách hàng',
+          data.message || 'Gửi media'
+        );
+      }
+      
+      // Mark unread
+      if (!isViewingConversation) {
+        setUnreadConversations(prev => new Set([...prev, data.customerId]));
+      }
+      
+      // Force reload conversations
+      console.log('🔄 Reloading conversations...');
+      setTimeout(() => loadConversations(), 0);
+      
+      // Emit custom event
+      window.dispatchEvent(new CustomEvent('newMessageReceived', { 
+        detail: data 
+      }));
+    });
+
+    socketService.on('message_sent', (data) => {
+      console.log('✅ Message sent:', data);
+      setTimeout(() => loadConversations(), 0);
+      
+      window.dispatchEvent(new CustomEvent('newMessageReceived', { 
+        detail: data 
+      }));
+    });
     
-    window.dispatchEvent(new CustomEvent('newMessageReceived', { 
-      detail: data 
-    }));
-  });
-  
-  console.log('✅ Socket listeners setup complete');
-}, [selectedConversation, sidebarOpen, loadConversations]);
+    console.log('✅ Socket listeners setup complete');
+  }, [selectedConversation, sidebarOpen, loadConversations]);
 
+  // Main useEffect
+  useEffect(() => {
+    loadInitialData();
+    connectSocket();
+    
+    // Listen labels update
+    const handleLabelsUpdate = () => {
+      loadConversations();
+    };
+    window.addEventListener('labelsUpdated', handleLabelsUpdate);
 
+    // Listen socket reconnect
+    const handleSocketReconnect = () => {
+      console.log('🔄 Socket reconnected, re-setup listeners...');
+      connectSocket();
+      loadConversations();
+    };
+    window.addEventListener('socketReconnected', handleSocketReconnect);
+
+    // Init push notifications
+    pushManager.init().then(success => {
+      if (success) {
+        console.log('✅ Push notifications enabled');
+      }
+    }).catch(err => {
+      console.error('Push init error', err);
+    });
+
+    // Listen for SW messages
+    const swMessageHandler = (event) => {
+      const data = event.data || {};
+
+      if (data.type === 'notification-click') {
+        const customerId = data.customerId;
+        if (customerId) {
+          const conv = conversations.find(c => c.id === customerId);
+          if (conv) {
+            handleSelectConversation(conv);
+          }
+        }
+      }
+
+      if (data.type === 'sync-complete') {
+        loadConversations();
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', swMessageHandler);
+
+    return () => {
+      socketService.disconnect();
+      window.removeEventListener('labelsUpdated', handleLabelsUpdate);
+      window.removeEventListener('socketReconnected', handleSocketReconnect);
+      navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
+    };
+  }, [connectSocket, loadConversations]);
 
   const handleSelectConversation = (conv) => {
     setSelectedConversation(conv);
@@ -205,7 +207,6 @@ const Dashboard = () => {
         translate
       });
       
-      // Reload conversations
       loadConversations();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -213,13 +214,60 @@ const Dashboard = () => {
     }
   };
 
-  // Callback to trigger message reload in ChatWindow
   const handleNewMessageForConversation = useCallback((callback) => {
     const trigger = messageReloadTriggers[selectedConversation?.id];
     if (trigger) {
       callback(selectedConversation.id);
     }
   }, [messageReloadTriggers, selectedConversation]);
+
+  // Swipe gesture handlers
+  const minSwipeDistance = 50;
+  const edgeThreshold = 50;
+
+  const onTouchStart = (e) => {
+    if (e.targetTouches[0].clientX <= edgeThreshold) {
+      setTouchEnd(null);
+      setTouchStart(e.targetTouches[0].clientX);
+      setTouchStartY(e.targetTouches[0].clientY);
+    }
+  };
+
+  const onTouchMove = (e) => {
+    if (touchStart !== null && touchStartY !== null) {
+      const currentX = e.targetTouches[0].clientX;
+      const currentY = e.targetTouches[0].clientY;
+      setTouchEnd(currentX);
+      
+      const deltaX = Math.abs(currentX - touchStart);
+      const deltaY = Math.abs(currentY - touchStartY);
+      
+      if (deltaX > deltaY && deltaX > 15) {
+        e.preventDefault();
+      }
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) {
+      setTouchStart(null);
+      setTouchEnd(null);
+      setTouchStartY(null);
+      return;
+    }
+    
+    const distance = touchEnd - touchStart;
+    const isRightSwipe = distance > minSwipeDistance;
+    
+    if (isRightSwipe && !sidebarOpen) {
+      console.log('👉 Swipe right detected, opening sidebar');
+      setSidebarOpen(true);
+    }
+    
+    setTouchStart(null);
+    setTouchEnd(null);
+    setTouchStartY(null);
+  };
 
   if (loading) {
     return (
@@ -231,63 +279,6 @@ const Dashboard = () => {
       </div>
     );
   }
-// Swipe gesture handlers
-const minSwipeDistance = 50; // Khoảng cách tối thiểu để coi là swipe
-const edgeThreshold = 50; // Chỉ detect swipe từ 50px cạnh trái
-
-const onTouchStart = (e) => {
-  // Chỉ detect khi touch ở cạnh trái màn hình
-  if (e.targetTouches[0].clientX <= edgeThreshold) {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-    setTouchStartY(e.targetTouches[0].clientY);
-  }
-};
-
-
-const onTouchMove = (e) => {
-  if (touchStart !== null && touchStartY !== null) {
-    const currentX = e.targetTouches[0].clientX;
-    const currentY = e.targetTouches[0].clientY;
-    setTouchEnd(currentX);
-    
-    // Tính khoảng cách di chuyển
-    const deltaX = Math.abs(currentX - touchStart);
-    const deltaY = Math.abs(currentY - touchStartY);
-    
-    // Chỉ preventDefault khi vuốt NGANG nhiều hơn DỌC
-    if (deltaX > deltaY && deltaX > 15) {
-      e.preventDefault();
-    }
-  }
-};
-
-
-
-const onTouchEnd = () => {
-  if (!touchStart || !touchEnd) {
-    // Reset nếu không có gesture hợp lệ
-    setTouchStart(null);
-    setTouchEnd(null);
-    setTouchStartY(null);
-    return;
-  }
-  
-  const distance = touchEnd - touchStart;
-  const isRightSwipe = distance > minSwipeDistance;
-  
-  // Chỉ xử lý swipe phải (mở sidebar)
-  if (isRightSwipe && !sidebarOpen) {
-    console.log('👉 Swipe right detected, opening sidebar');
-    setSidebarOpen(true);
-  }
-  
-  // Reset tất cả
-  setTouchStart(null);
-  setTouchEnd(null);
-  setTouchStartY(null);
-};
-
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -317,32 +308,32 @@ const onTouchEnd = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Overlay khi sidebar mở (mobile) */}
-          {sidebarOpen && (
-            <div 
-              className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        
         {/* Sidebar - Luôn mount, chỉ ẩn bằng transform */}
-          <div className={`
-            fixed md:relative
-            top-0 left-0
-            w-full md:w-80 
-            h-full
-            bg-white
-            z-20
-            transition-transform duration-300
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          `}>
-            <Sidebar
-              conversations={conversations}
-              selectedId={selectedConversation?.id}
-              onSelect={handleSelectConversation}
-              labels={labels}
-              unreadConversations={unreadConversations}
-            />
-          </div>
-
+        <div className={`
+          fixed md:relative
+          top-0 left-0
+          w-full md:w-80 
+          h-full
+          bg-white
+          z-20
+          transition-transform duration-300
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+          <Sidebar
+            conversations={conversations}
+            selectedId={selectedConversation?.id}
+            onSelect={handleSelectConversation}
+            labels={labels}
+            unreadConversations={unreadConversations}
+          />
+        </div>
 
         {/* Chat Window */}
         <div className="flex-1 h-full relative md:flex">
@@ -354,11 +345,9 @@ const onTouchEnd = () => {
             onTouchEnd={onTouchEnd}
             style={{ 
               pointerEvents: sidebarOpen ? 'none' : 'auto',
-              touchAction: 'pan-y' // Cho phép scroll dọc
+              touchAction: 'pan-y'
             }}
           />
-
-
 
           {/* Back Button on Mobile */}
           {selectedConversation && (
@@ -378,8 +367,6 @@ const onTouchEnd = () => {
           />
         </div>
       </div>
-
-      {/* Notification Settings */}
 
       {/* Quick Reply Manager Modal */}
       {showQRManager && (
