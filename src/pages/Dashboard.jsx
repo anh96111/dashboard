@@ -33,9 +33,11 @@ const Dashboard = () => {
   };
   window.addEventListener('labelsUpdated', handleLabelsUpdate);
   // THÊM: Listen socket reconnect
+    // Listen socket reconnect - RE-SETUP LISTENERS
   const handleSocketReconnect = () => {
-    console.log('🔄 Socket reconnected, reloading data...');
-    loadConversations(); // Reload conversations
+    console.log('🔄 Socket reconnected, re-setup listeners...');
+    connectSocket(); // Setup lại listeners
+    loadConversations(); // Reload data
   };
   window.addEventListener('socketReconnected', handleSocketReconnect);
   // Init push notifications
@@ -76,7 +78,7 @@ const Dashboard = () => {
     window.removeEventListener('socketReconnected', handleSocketReconnect);
     navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
   };
-}, []);
+}, [connectSocket]);
   const loadInitialData = async () => {
     setLoading(true);
     try {
@@ -97,49 +99,59 @@ const Dashboard = () => {
     }
   };
 
-  const connectSocket = () => {
-    socketService.connect();
-
-    socketService.on('new_message', (data) => {
-  console.log('📨 Dashboard received new_message:', data);
-  console.log('📱 Sidebar open:', sidebarOpen);
-  console.log('👁️ Current conversation:', selectedConversation?.id);
+  const connectSocket = useCallback(() => {
+  console.log('🔌 Setting up socket listeners...');
   
-  const isViewingConversation = selectedConversation?.id === data.customerId;
+  // Cleanup old listeners trước
+  socketService.off('new_message');
+  socketService.off('message_sent');
+  
+  // Connect socket
+  socketService.connect();
 
-      // Play notification (chỉ khi không xem conversation đó)
-      if (!isViewingConversation || document.hidden) {
-        notificationService.notify(
-          data.customerName || 'Khách hàng',
-          data.message || 'Gửi media'
-        );
-      }
-      
-      // Mark unread
-      if (!isViewingConversation) {
-        setUnreadConversations(prev => new Set([...prev, data.customerId]));
-      }
-      
-      // Reload conversations - QUAN TRỌNG
-console.log('🔄 Reloading conversations...');
-loadConversations();
+  // Setup new listeners
+  socketService.on('new_message', (data) => {
+    console.log('📨 Dashboard received new_message:', data);
+    console.log('📱 Sidebar open:', sidebarOpen);
+    console.log('👁️ Current conversation:', selectedConversation?.id);
+    
+    const isViewingConversation = selectedConversation?.id === data.customerId;
 
-      
-      // Emit custom event để ChatWindow reload
-      window.dispatchEvent(new CustomEvent('newMessageReceived', { 
-        detail: data 
-      }));
-    });
+    // Play notification
+    if (!isViewingConversation || document.hidden) {
+      notificationService.notify(
+        data.customerName || 'Khách hàng',
+        data.message || 'Gửi media'
+      );
+    }
+    
+    // Mark unread
+    if (!isViewingConversation) {
+      setUnreadConversations(prev => new Set([...prev, data.customerId]));
+    }
+    
+    // QUAN TRỌNG: Force reload conversations
+    console.log('🔄 Reloading conversations...');
+    loadConversations();
+    
+    // Emit custom event
+    window.dispatchEvent(new CustomEvent('newMessageReceived', { 
+      detail: data 
+    }));
+  });
 
-    socketService.on('message_sent', (data) => {
-      console.log('✅ Message sent:', data);
-      loadConversations();
-      
-      window.dispatchEvent(new CustomEvent('newMessageReceived', { 
-        detail: data 
-      }));
-    });
-  };
+  socketService.on('message_sent', (data) => {
+    console.log('✅ Message sent:', data);
+    loadConversations();
+    
+    window.dispatchEvent(new CustomEvent('newMessageReceived', { 
+      detail: data 
+    }));
+  });
+  
+  console.log('✅ Socket listeners setup complete');
+}, [selectedConversation, sidebarOpen, loadConversations]);
+
 
   const loadConversations = async () => {
     try {
