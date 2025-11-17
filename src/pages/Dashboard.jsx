@@ -79,6 +79,7 @@ const Dashboard = () => {
     navigator.serviceWorker?.removeEventListener('message', swMessageHandler);
   };
 }, [connectSocket]);
+
   const loadInitialData = async () => {
     setLoading(true);
     try {
@@ -99,6 +100,33 @@ const Dashboard = () => {
     }
   };
 
+  const loadConversations = useCallback(async () => {
+    try {
+      const response = await conversationsAPI.getAll();
+      const convs = response.data.data || [];
+      
+      console.log(`✅ Loaded ${convs.length} conversations`);
+      // Sort: unread first, then by last message time
+      const sorted = convs.sort((a, b) => {
+        const aUnread = unreadConversations.has(a.id);
+        const bUnread = unreadConversations.has(b.id);
+        
+        if (aUnread && !bUnread) return -1;
+        if (!aUnread && bUnread) return 1;
+        
+        // Both same unread status, sort by time
+        const aTime = new Date(a.last_message_at || 0);
+        const bTime = new Date(b.last_message_at || 0);
+        return bTime - aTime;
+      });
+      
+      setConversations(sorted);
+      console.log('✅ Conversations state updated');
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+  }
+  }, [unreadConversations]);
+  
   const connectSocket = useCallback(() => {
   console.log('🔌 Setting up socket listeners...');
   
@@ -153,32 +181,6 @@ const Dashboard = () => {
 }, [selectedConversation, sidebarOpen, loadConversations]);
 
 
-  const loadConversations = async () => {
-    try {
-      const response = await conversationsAPI.getAll();
-      const convs = response.data.data || [];
-      
-      console.log(`✅ Loaded ${convs.length} conversations`);
-      // Sort: unread first, then by last message time
-      const sorted = convs.sort((a, b) => {
-        const aUnread = unreadConversations.has(a.id);
-        const bUnread = unreadConversations.has(b.id);
-        
-        if (aUnread && !bUnread) return -1;
-        if (!aUnread && bUnread) return 1;
-        
-        // Both same unread status, sort by time
-        const aTime = new Date(a.last_message_at || 0);
-        const bTime = new Date(b.last_message_at || 0);
-        return bTime - aTime;
-      });
-      
-      setConversations(sorted);
-      console.log('✅ Conversations state updated');
-    } catch (error) {
-      console.error('Error loading conversations:', error);
-    }
-  };
 
   const handleSelectConversation = (conv) => {
     setSelectedConversation(conv);
